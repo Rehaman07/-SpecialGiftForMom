@@ -1,16 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../store/useGameStore';
 import { useAudio } from '../hooks/useAudio';
 import { Key, Sparkles, Heart, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { GAME_CONFIG } from '../constants';
+import { useDocumentVisible, usePerformanceProfile } from '../utils/performance';
+
+const MOMMY_IMAGE_URL = new URL('../../Mommy.png', import.meta.url).href;
 
 export const TreasureRoom: React.FC = () => {
   const [selectedKey, setSelectedKey] = useState<number | null>(null);
   const [correctKey] = useState(Math.floor(Math.random() * 3));
   const { setScene } = useGameStore();
   const { playSound } = useAudio();
+  const profile = usePerformanceProfile();
+  const transitionTimerRef = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(transitionTimerRef.current), []);
 
   const handleKeyChoice = (idx: number) => {
     if (selectedKey !== null) return;
@@ -20,15 +27,17 @@ export const TreasureRoom: React.FC = () => {
       playSound('chest');
       playSound('unlock');
       confetti({
-        particleCount: 200,
+        particleCount: Math.round(200 * profile.confettiScale),
         spread: 70,
         origin: { y: 0.6 },
         colors: ['#FFD700', '#FF1493', '#FFFFFF'],
       });
-      setTimeout(() => setScene('REVEAL'), 2000);
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = window.setTimeout(() => setScene('REVEAL'), 2000);
     } else {
       playSound('fail');
-      setTimeout(() => setSelectedKey(null), 1000);
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = window.setTimeout(() => setSelectedKey(null), 1000);
     }
   };
 
@@ -51,8 +60,9 @@ export const TreasureRoom: React.FC = () => {
         >
           <div className="absolute inset-3 rounded-xl overflow-hidden border-4 border-amber-400/70 bg-amber-950/70 shadow-inner">
             <img
-              src="/mommy.png"
+              src={MOMMY_IMAGE_URL}
               alt="Mommy"
+              decoding="async"
               className="w-full h-full object-cover"
             />
           </div>
@@ -104,29 +114,58 @@ export const TreasureRoom: React.FC = () => {
 export const FinalReveal: React.FC = () => {
   const { playSound } = useAudio();
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const profile = usePerformanceProfile();
+  const isVisible = useDocumentVisible();
+  const sparkles = useMemo(
+    () => Array.from({ length: Math.max(14, Math.round(30 * profile.particleScale)) }, (_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 80 + 20}%`,
+      x: (Math.random() - 0.5) * 100,
+      size: 8 + Math.random() * 16,
+      duration: 3 + Math.random() * 4,
+      delay: Math.random() * 10,
+    })),
+    [profile.particleScale],
+  );
+  const hearts = useMemo(
+    () => Array.from({ length: Math.max(10, Math.round(20 * profile.particleScale)) }, (_, i) => ({
+      id: i,
+      x: `${Math.random() * 100}%`,
+      size: 24 + Math.random() * 20,
+      duration: 5 + Math.random() * 5,
+      delay: Math.random() * 5,
+    })),
+    [profile.particleScale],
+  );
 
   useEffect(() => {
     playSound('win');
     const end = Date.now() + 15000;
+    let frameId = 0;
     const frame = () => {
-      confetti({
-        particleCount: 2,
-        angle: 60,
-        spread: 55,
-        origin: { x: 0 },
-        colors: ['#FFD700', '#FF69B4', '#00FFFF'],
-      });
-      confetti({
-        particleCount: 2,
-        angle: 120,
-        spread: 55,
-        origin: { x: 1 },
-        colors: ['#FFD700', '#FF69B4', '#00FFFF'],
-      });
-      if (Date.now() < end) requestAnimationFrame(frame);
+      if (!document.hidden) {
+        const particleCount = Math.max(1, Math.round(2 * profile.confettiScale));
+        confetti({
+          particleCount,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0 },
+          colors: ['#FFD700', '#FF69B4', '#00FFFF'],
+        });
+        confetti({
+          particleCount,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1 },
+          colors: ['#FFD700', '#FF69B4', '#00FFFF'],
+        });
+      }
+      if (Date.now() < end) frameId = requestAnimationFrame(frame);
     };
     frame();
-  }, [playSound]);
+    return () => cancelAnimationFrame(frameId);
+  }, [playSound, profile.confettiScale]);
 
   return (
     <motion.div
@@ -151,13 +190,15 @@ export const FinalReveal: React.FC = () => {
             playSound('sparkle');
             setIsFullScreen(true);
           }}
-          className="relative group p-4 bg-white/10 glass rounded-[2.5rem] shadow-[0_0_50px_rgba(236,72,153,0.3)] mb-12 cursor-zoom-in"
+          className="relative group p-4 bg-white/10 glass rounded-[2.5rem] shadow-[0_0_50px_rgba(236,72,153,0.3)] mb-12 cursor-zoom-in touch-manipulation"
           aria-label="Open magic view"
         >
           <div className="aspect-[3/4] w-full rounded-[2rem] overflow-hidden bg-pink-950/50 flex items-center justify-center relative">
             <img
               src={GAME_CONFIG.REVEAL_IMAGE_URL}
               alt="Mother's Day"
+              loading="eager"
+              decoding="async"
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-pink-900/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -192,19 +233,19 @@ export const FinalReveal: React.FC = () => {
       </motion.div>
 
       <div className="absolute inset-0 pointer-events-none">
-        {[...Array(30)].map((_, i) => (
+        {sparkles.map((sparkle) => (
           <motion.div
-            key={i}
+            key={sparkle.id}
             animate={{
-              y: [0, -200],
-              x: [0, (Math.random() - 0.5) * 100],
-              opacity: [0, 1, 0],
+              y: isVisible ? [0, -200] : 0,
+              x: isVisible ? [0, sparkle.x] : 0,
+              opacity: isVisible ? [0, 1, 0] : 0,
             }}
-            transition={{ duration: 3 + Math.random() * 4, repeat: Infinity, delay: Math.random() * 10 }}
+            transition={{ duration: sparkle.duration, repeat: Infinity, delay: sparkle.delay }}
             className="absolute text-yellow-400/40"
-            style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 80 + 20}%` }}
+            style={{ left: sparkle.left, top: sparkle.top, willChange: 'transform, opacity' }}
           >
-            <Sparkles size={8 + Math.random() * 16} />
+            <Sparkles size={sparkle.size} />
           </motion.div>
         ))}
       </div>
@@ -219,23 +260,24 @@ export const FinalReveal: React.FC = () => {
             onClick={() => setIsFullScreen(false)}
           >
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              {[...Array(20)].map((_, i) => (
+              {hearts.map((heart) => (
                 <motion.div
-                  key={i}
-                  initial={{ y: -50, x: Math.random() * 100 + '%', opacity: 0 }}
+                  key={heart.id}
+                  initial={{ y: -50, x: heart.x, opacity: 0 }}
                   animate={{
-                    y: '110vh',
-                    opacity: [0, 1, 1, 0],
-                    rotate: 360,
+                    y: isVisible ? '110vh' : -50,
+                    opacity: isVisible ? [0, 1, 1, 0] : 0,
+                    rotate: isVisible ? 360 : 0,
                   }}
                   transition={{
-                    duration: 5 + Math.random() * 5,
+                    duration: heart.duration,
                     repeat: Infinity,
-                    delay: Math.random() * 5,
+                    delay: heart.delay,
                   }}
                   className="absolute"
+                  style={{ willChange: 'transform, opacity' }}
                 >
-                  <Heart className="text-pink-500/40 fill-pink-500/20" size={24 + Math.random() * 20} />
+                  <Heart className="text-pink-500/40 fill-pink-500/20" size={heart.size} />
                 </motion.div>
               ))}
             </div>
@@ -250,6 +292,8 @@ export const FinalReveal: React.FC = () => {
               <img
                 src={GAME_CONFIG.REVEAL_IMAGE_URL}
                 alt="Mother's Day Surprise"
+                loading="eager"
+                decoding="async"
                 className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_100px_rgba(236,72,153,0.4)]"
               />
               <button
@@ -257,7 +301,7 @@ export const FinalReveal: React.FC = () => {
                   playSound('click');
                   setIsFullScreen(false);
                 }}
-                className="absolute top-0 right-0 m-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white glass"
+                className="absolute top-0 right-0 m-4 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white glass touch-manipulation"
                 aria-label="Close magic view"
               >
                 <X size={24} />

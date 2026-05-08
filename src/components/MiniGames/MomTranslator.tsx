@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { useAudio } from '../../hooks/useAudio';
 import { MessageSquare, ThumbsUp } from 'lucide-react';
@@ -27,19 +27,23 @@ const RIDDLES = [
 export const MomTranslator: React.FC<{ onWin: () => void; onLose: () => void }> = ({ onWin }) => {
   const [step, setStep] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
+  const choiceTimerRef = useRef(0);
   const { playSound } = useAudio();
 
   useEffect(() => {
     playSound('typing');
   }, [playSound, step]);
 
+  useEffect(() => () => window.clearTimeout(choiceTimerRef.current), []);
+
   const handleChoice = (idx: number) => {
     setSelected(idx);
     playSound('click');
+    window.clearTimeout(choiceTimerRef.current);
 
     if (idx === RIDDLES[step].correct) {
       playSound('unlock');
-      setTimeout(() => {
+      choiceTimerRef.current = window.setTimeout(() => {
         if (step + 1 < RIDDLES.length) {
           setStep(s => s + 1);
           setSelected(null);
@@ -49,14 +53,14 @@ export const MomTranslator: React.FC<{ onWin: () => void; onLose: () => void }> 
       }, 1000);
     } else {
       playSound('fail');
-      setTimeout(() => setSelected(null), 800);
+      choiceTimerRef.current = window.setTimeout(() => setSelected(null), 800);
     }
   };
 
   const current = RIDDLES[step];
 
   return (
-    <div className="flex flex-col items-center gap-6 glass p-8 rounded-[40px] w-full max-w-sm bg-purple-900/40 border-purple-500/30">
+    <div className="flex flex-col items-center gap-6 glass p-6 sm:p-8 rounded-[40px] w-full max-w-sm bg-purple-900/40 border-purple-500/30">
       <div className="w-full flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 text-purple-200">
           <MessageSquare size={20} />
@@ -83,7 +87,7 @@ export const MomTranslator: React.FC<{ onWin: () => void; onLose: () => void }> 
             whileTap={{ scale: 0.98 }}
             onClick={() => handleChoice(i)}
             disabled={selected !== null}
-            className={`text-left p-4 rounded-2xl text-sm font-display transition-all border ${
+            className={`text-left p-4 min-h-12 rounded-2xl text-sm font-display transition-all border touch-manipulation ${
               selected === i
                 ? (i === current.correct ? 'bg-green-500/30 border-green-400 text-white' : 'bg-red-500/30 border-red-400 text-white animate-shake')
                 : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/20'

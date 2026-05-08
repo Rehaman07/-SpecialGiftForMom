@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, ShieldAlert, Sparkles } from 'lucide-react';
 import { useAudio } from '../../hooks/useAudio';
+import { useDocumentVisible, usePerformanceProfile } from '../../utils/performance';
 
 type FallingItem = {
   id: number;
@@ -26,12 +27,22 @@ export const HeartCatch: React.FC<{ onWin: () => void; onLose: () => void }> = (
   const [status, setStatus] = useState<'playing' | 'won' | 'lost'>('playing');
   const nextIdRef = useRef(1);
   const catcherRef = useRef(catcherX);
+  const scoreRef = useRef(score);
   const statusRef = useRef(status);
+  const resultTimerRef = useRef(0);
+  const pendingCatcherFrame = useRef(0);
+  const pendingCatcherX = useRef(catcherX);
   const { playSound } = useAudio();
+  const profile = usePerformanceProfile();
+  const isVisible = useDocumentVisible();
 
   useEffect(() => {
     catcherRef.current = catcherX;
   }, [catcherX]);
+
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -51,103 +62,138 @@ export const HeartCatch: React.FC<{ onWin: () => void; onLose: () => void }> = (
         type,
         x: 24 + Math.random() * (GAME_WIDTH - 48),
         y: -48,
-        speed: 3.2 + Math.random() * 2.2 + Math.min(score / 18, 1.4),
+        speed: (3.2 + Math.random() * 2.2 + Math.min(scoreRef.current / 18, 1.4)) * (profile.isLowEnd ? 0.92 : 1),
         size,
       },
     ]);
     nextIdRef.current += 1;
-  }, [score]);
+  }, [profile.isLowEnd]);
 
   useEffect(() => {
-    const spawnTimer = window.setInterval(spawnItem, 520);
-    return () => window.clearInterval(spawnTimer);
-  }, [spawnItem]);
+    if (!isVisible) return;
 
-  useEffect(() => {
-    const tick = window.setInterval(() => {
-      if (statusRef.current !== 'playing') return;
+    let frameId = 0;
+    let lastTime = performance.now();
+    let moveAccumulator = 0;
+    let spawnAccumulator = 0;
+    const tickMs = profile.isLowEnd ? 48 : 32;
+    const spawnMs = profile.isLowEnd ? 660 : profile.isMobile ? 590 : 520;
 
-      setItems(prev => {
-        const remaining: FallingItem[] = [];
-        let scoreDelta = 0;
-        let lifeDelta = 0;
-        let caughtAny = false;
-        let hitHazard = false;
+    const tick = (time: number) => {
+      const delta = Math.min(80, time - lastTime);
+      lastTime = time;
 
-        for (const item of prev) {
-          const nextItem = { ...item, y: item.y + item.speed };
-          const catcherLeft = catcherRef.current - CATCHER_WIDTH / 2;
-          const catcherRight = catcherRef.current + CATCHER_WIDTH / 2;
-          const itemCenter = nextItem.x;
-          const isCatchHeight = nextItem.y > GAME_HEIGHT - 82 && nextItem.y < GAME_HEIGHT - 24;
-          const isInCatcher = itemCenter > catcherLeft && itemCenter < catcherRight;
+      if (statusRef.current === 'playing') {
+        moveAccumulator += delta;
+        spawnAccumulator += delta;
 
-          if (isCatchHeight && isInCatcher) {
-            if (nextItem.type === 'hazard') {
-              lifeDelta -= 1;
-              hitHazard = true;
-            } else {
-              scoreDelta += nextItem.type === 'gold' ? 4 : 1;
-              caughtAny = true;
-            }
-            continue;
-          }
-
-          if (nextItem.y > GAME_HEIGHT + 60) {
-            if (nextItem.type !== 'hazard') {
-              lifeDelta -= 1;
-              hitHazard = true;
-            }
-            continue;
-          }
-
-          remaining.push(nextItem);
+        if (spawnAccumulator >= spawnMs) {
+          spawnAccumulator = 0;
+          spawnItem();
         }
 
-        if (caughtAny) playSound('heart');
-        if (hitHazard) playSound('fail');
+        if (moveAccumulator >= tickMs) {
+          moveAccumulator = 0;
 
-        if (scoreDelta > 0) {
-          setScore(current => {
-            const nextScore = current + scoreDelta;
-            if (nextScore >= TARGET_SCORE && statusRef.current === 'playing') {
-              statusRef.current = 'won';
-              setStatus('won');
-              playSound('sparkle');
-              window.setTimeout(onWin, 450);
+          setItems(prev => {
+            const remaining: FallingItem[] = [];
+            let scoreDelta = 0;
+            let lifeDelta = 0;
+            let caughtAny = false;
+            let hitHazard = false;
+
+            for (const item of prev) {
+              const nextItem = { ...item, y: item.y + item.speed };
+              const catcherLeft = catcherRef.current - CATCHER_WIDTH / 2;
+              const catcherRight = catcherRef.current + CATCHER_WIDTH / 2;
+              const itemCenter = nextItem.x;
+              const isCatchHeight = nextItem.y > GAME_HEIGHT - 82 && nextItem.y < GAME_HEIGHT - 24;
+              const isInCatcher = itemCenter > catcherLeft && itemCenter < catcherRight;
+
+              if (isCatchHeight && isInCatcher) {
+                if (nextItem.type === 'hazard') {
+                  lifeDelta -= 1;
+                  hitHazard = true;
+                } else {
+                  scoreDelta += nextItem.type === 'gold' ? 4 : 1;
+                  caughtAny = true;
+                }
+                continue;
+              }
+
+              if (nextItem.y > GAME_HEIGHT + 60) {
+                if (nextItem.type !== 'hazard') {
+                  lifeDelta -= 1;
+                  hitHazard = true;
+                }
+                continue;
+              }
+
+              remaining.push(nextItem);
             }
-            return nextScore;
+
+            if (caughtAny) playSound('heart');
+            if (hitHazard) playSound('fail');
+
+            if (scoreDelta > 0) {
+              setScore(current => {
+                const nextScore = current + scoreDelta;
+                if (nextScore >= TARGET_SCORE && statusRef.current === 'playing') {
+                  statusRef.current = 'won';
+                  setStatus('won');
+                  playSound('sparkle');
+                  window.clearTimeout(resultTimerRef.current);
+                  resultTimerRef.current = window.setTimeout(onWin, 450);
+                }
+                return nextScore;
+              });
+            }
+
+            if (lifeDelta < 0) {
+              setLives(current => {
+                const nextLives = Math.max(0, current + lifeDelta);
+                if (nextLives <= 0 && statusRef.current === 'playing') {
+                  statusRef.current = 'lost';
+                  setStatus('lost');
+                  window.clearTimeout(resultTimerRef.current);
+                  resultTimerRef.current = window.setTimeout(onLose, 700);
+                }
+                return nextLives;
+              });
+            }
+
+            return remaining;
           });
         }
+      }
 
-        if (lifeDelta < 0) {
-          setLives(current => {
-            const nextLives = Math.max(0, current + lifeDelta);
-            if (nextLives <= 0 && statusRef.current === 'playing') {
-              statusRef.current = 'lost';
-              setStatus('lost');
-              window.setTimeout(onLose, 700);
-            }
-            return nextLives;
-          });
-        }
+      frameId = window.requestAnimationFrame(tick);
+    };
 
-        return remaining;
-      });
-    }, 32);
+    frameId = window.requestAnimationFrame(tick);
 
-    return () => window.clearInterval(tick);
-  }, [onLose, onWin, playSound]);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [isVisible, onLose, onWin, playSound, profile.isLowEnd, profile.isMobile, spawnItem]);
 
   const moveCatcher = (clientX: number, bounds: DOMRect) => {
     const ratio = (clientX - bounds.left) / bounds.width;
     const nextX = Math.min(GAME_WIDTH - CATCHER_WIDTH / 2, Math.max(CATCHER_WIDTH / 2, ratio * GAME_WIDTH));
-    setCatcherX(nextX);
+    pendingCatcherX.current = nextX;
+    window.cancelAnimationFrame(pendingCatcherFrame.current);
+    pendingCatcherFrame.current = window.requestAnimationFrame(() => {
+      catcherRef.current = pendingCatcherX.current;
+      setCatcherX(pendingCatcherX.current);
+    });
   };
+
+  useEffect(() => () => {
+    window.cancelAnimationFrame(pendingCatcherFrame.current);
+    window.clearTimeout(resultTimerRef.current);
+  }, []);
 
   return (
     <div
-      className="relative w-[min(92vw,420px)] h-[440px] glass rounded-3xl overflow-hidden bg-gradient-to-b from-amber-900/50 via-rose-950/50 to-black/70 touch-none"
+      className="relative w-[min(92vw,420px)] h-[min(68vh,440px)] min-h-[360px] glass rounded-3xl overflow-hidden bg-gradient-to-b from-amber-900/50 via-rose-950/50 to-black/70 touch-none"
       onPointerMove={(event) => moveCatcher(event.clientX, event.currentTarget.getBoundingClientRect())}
       onPointerDown={(event) => {
         playSound('click');

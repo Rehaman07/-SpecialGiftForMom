@@ -3,17 +3,29 @@ import gsap from 'gsap';
 import { useGameStore } from '../store/useGameStore';
 import { useAudio } from '../hooks/useAudio';
 import { Sparkles } from 'lucide-react';
+import { usePerformanceProfile, useStableParticles } from '../utils/performance';
 
 export const IntroSequence: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const { setScene } = useGameStore();
   const { playSound } = useAudio();
+  const profile = usePerformanceProfile();
+  const particles = useStableParticles(
+    () => Array.from({ length: Math.max(10, Math.round(20 * profile.particleScale)) }, (_, i) => ({
+      id: i,
+      size: Math.random() * 300 + 100,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+    })),
+    [profile.particleScale],
+  );
 
   useEffect(() => {
+    let completionTimer = 0;
     const tl = gsap.timeline({
       onComplete: () => {
-        setTimeout(() => setScene('STORY'), 1000);
+        completionTimer = window.setTimeout(() => setScene('STORY'), 1000);
       }
     });
 
@@ -68,6 +80,7 @@ export const IntroSequence: React.FC = () => {
     });
 
     return () => {
+      window.clearTimeout(completionTimer);
       tl.kill();
     };
   }, [setScene, playSound]);
@@ -75,15 +88,15 @@ export const IntroSequence: React.FC = () => {
   return (
     <div ref={containerRef} className="intro-container fixed inset-0 z-[100] bg-black flex items-center justify-center overflow-hidden perspective-2000 pointer-events-none">
       {/* Background Particles */}
-      {[...Array(20)].map((_, i) => (
+      {particles.map((particle) => (
         <div 
-          key={i}
+          key={particle.id}
           className="particle-glow absolute rounded-full bg-pink-500/20 glow-bloom"
           style={{
-            width: Math.random() * 300 + 100,
-            height: Math.random() * 300 + 100,
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
+            width: particle.size,
+            height: particle.size,
+            left: particle.left,
+            top: particle.top,
             opacity: 0
           }}
         />

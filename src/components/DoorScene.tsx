@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Scene, useGameStore } from '../store/useGameStore';
 import { useAudio } from '../hooks/useAudio';
@@ -6,6 +6,7 @@ import { SlipperChase } from './MiniGames/SlipperChase';
 import { HeartCatch } from './MiniGames/HeartCatch';
 import { MomTranslator } from './MiniGames/MomTranslator';
 import { Key } from 'lucide-react';
+import { useDocumentVisible, usePerformanceProfile } from '../utils/performance';
 
 const THEMES = [
   {
@@ -40,11 +41,27 @@ export const DoorScene: React.FC<{ doorIndex: number }> = ({ doorIndex }) => {
   const { setScene, resetGame } = useGameStore();
   const { playSound } = useAudio();
   const theme = THEMES[doorIndex - 1];
+  const profile = usePerformanceProfile();
+  const isVisible = useDocumentVisible();
+  const transitionTimerRef = useRef(0);
+  const particles = useMemo(
+    () => Array.from({ length: Math.max(14, Math.round(30 * profile.particleScale)) }, (_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      x: Math.sin(i) * 100,
+      duration: 5 + Math.random() * 5,
+      delay: Math.random() * 5,
+    })),
+    [profile.particleScale],
+  );
+
+  useEffect(() => () => window.clearTimeout(transitionTimerRef.current), []);
 
   const handleWin = () => {
     playSound('unlock');
     setUnlocked(true);
-    setTimeout(() => {
+    window.clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = window.setTimeout(() => {
       if (doorIndex < 3) {
         playSound('whoosh');
         setScene(`DOOR_${doorIndex + 1}` as Scene);
@@ -65,24 +82,24 @@ export const DoorScene: React.FC<{ doorIndex: number }> = ({ doorIndex }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 2, filter: 'blur(30px)' }}
-      className={`absolute inset-0 flex flex-col items-center justify-center overflow-hidden ${theme.bg}`}
+      className={`absolute inset-0 flex flex-col items-center justify-center overflow-hidden px-4 ${theme.bg}`}
     >
       <div className="absolute inset-0 pointer-events-none opacity-40">
-        {[...Array(30)].map((_, i) => (
+        {particles.map((particle) => (
           <motion.div
-            key={i}
+            key={particle.id}
             animate={{
-              y: [-20, -1000],
-              x: Math.sin(i) * 100,
-              opacity: [0, 1, 0],
+              y: isVisible ? [-20, -1000] : -20,
+              x: particle.x,
+              opacity: isVisible ? [0, 1, 0] : 0,
             }}
             transition={{
-              duration: 5 + Math.random() * 5,
+              duration: particle.duration,
               repeat: Infinity,
-              delay: Math.random() * 5,
+              delay: particle.delay,
             }}
             className={`absolute bottom-[-100px] text-4xl ${theme.particles}`}
-            style={{ left: `${Math.random() * 100}%` }}
+            style={{ left: particle.left, willChange: 'transform, opacity' }}
           >
             {theme.particle}
           </motion.div>
@@ -118,7 +135,7 @@ export const DoorScene: React.FC<{ doorIndex: number }> = ({ doorIndex }) => {
               playSound('doorSlam');
               setShowGame(true);
             }}
-            className="group relative cursor-pointer"
+            className="group relative cursor-pointer touch-manipulation"
           >
             <div className={`w-[250px] h-[400px] md:w-[350px] md:h-[550px] bg-black/40 border-[12px] ${theme.doorColor} rounded-t-full shadow-2xl transition-all duration-700 group-hover:scale-105 group-hover:shadow-[0_0_100px_rgba(255,255,255,0.2)]`}>
               <div className="absolute inset-0 flex items-center justify-center">
@@ -150,7 +167,7 @@ export const DoorScene: React.FC<{ doorIndex: number }> = ({ doorIndex }) => {
             initial={{ y: 100, opacity: 0, rotateX: 45 }}
             animate={{ y: 0, opacity: 1, rotateX: 0 }}
             exit={{ scale: 0.5, opacity: 0 }}
-            className="flex flex-col items-center gap-8 perspective-2000"
+            className="flex flex-col items-center gap-8 perspective-2000 w-full max-w-[min(92vw,420px)]"
           >
             {doorIndex === 1 && <SlipperChase onWin={handleWin} onLose={handleLose} />}
             {doorIndex === 2 && <HeartCatch onWin={handleWin} onLose={handleLose} />}

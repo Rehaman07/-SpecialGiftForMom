@@ -8,7 +8,7 @@ import { SceneManager } from './components/SceneManager';
 
 export default function App() {
   return (
-    <div className="w-full h-screen bg-black">
+    <div className="w-full h-[100dvh] bg-black overflow-hidden">
       <SceneManager />
       
       {/* Scanline Effect for cinematic feel */}

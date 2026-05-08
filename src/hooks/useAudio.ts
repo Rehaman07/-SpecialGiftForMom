@@ -18,6 +18,7 @@ type SoundKey =
 
 let audioContext: AudioContext | null = null;
 let musicElement: HTMLAudioElement | null = null;
+const AMBIENT_AUDIO_URL = new URL('../../pirates.mp3', import.meta.url).href;
 
 const getAudioContext = () => {
   if (!audioContext) {
@@ -87,9 +88,10 @@ const playNoise = (context: AudioContext, duration: number, volume = 0.12) => {
 
 const startAmbient = () => {
   if (!musicElement) {
-    musicElement = new Audio('/pirates.mp3');
+    musicElement = new Audio(AMBIENT_AUDIO_URL);
     musicElement.loop = true;
     musicElement.volume = 0.28;
+    musicElement.preload = 'auto';
   }
 
   void musicElement.play().catch(() => {

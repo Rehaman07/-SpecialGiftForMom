@@ -34,13 +34,13 @@ export const SceneManager: React.FC = () => {
   }, [currentScene, setScene]);
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden select-none">
-      <div className="fixed top-6 right-6 z-[110] flex gap-4">
+    <div className="relative w-full h-[100dvh] bg-black overflow-hidden select-none">
+      <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[110] flex gap-3 sm:gap-4">
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={handleToggleAudio}
-          className="p-3 glass rounded-full text-white/80 hover:text-white"
+          className="p-3 min-h-12 min-w-12 glass rounded-full text-white/80 hover:text-white touch-manipulation"
           aria-label={isAudioOn ? 'Turn sound off' : 'Turn sound on'}
         >
           {isAudioOn ? <Volume2 size={24} /> : <VolumeX size={24} />}
@@ -49,7 +49,7 @@ export const SceneManager: React.FC = () => {
           whileHover={{ scale: 1.1, rotate: 180 }}
           whileTap={{ scale: 0.9 }}
           onClick={handleReset}
-          className="p-3 glass rounded-full text-white/80 hover:text-white"
+          className="p-3 min-h-12 min-w-12 glass rounded-full text-white/80 hover:text-white touch-manipulation"
           aria-label="Restart adventure"
         >
           <RefreshCw size={24} />
@@ -65,7 +65,7 @@ export const SceneManager: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 1.2, filter: 'blur(20px)' }}
-            className="absolute inset-0 flex flex-col items-center justify-center p-10 text-center stars-container"
+            className="absolute inset-0 flex flex-col items-center justify-center p-6 sm:p-10 text-center stars-container"
           >
             <motion.h2
               initial={{ y: 20, opacity: 0 }}
@@ -79,7 +79,7 @@ export const SceneManager: React.FC = () => {
               whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(236, 72, 153, 0.4)' }}
               whileTap={{ scale: 0.95 }}
               onClick={handleBegin}
-              className="px-12 py-4 bg-pink-600/80 hover:bg-pink-500 rounded-full text-xl font-display tracking-widest text-white shadow-2xl glass"
+              className="px-10 sm:px-12 py-4 min-h-14 bg-pink-600/80 hover:bg-pink-500 rounded-full text-xl font-display tracking-widest text-white shadow-2xl glass touch-manipulation"
             >
               BEGIN ADVENTURE
             </motion.button>
