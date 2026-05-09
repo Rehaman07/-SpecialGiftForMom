@@ -20,11 +20,11 @@ const singleFileBuild = (): Plugin => ({
       if (output.type === 'chunk' && output.fileName.endsWith('.js')) {
         html = html.replace(
           new RegExp(`<script type="module" crossorigin src="/${output.fileName}"></script>`),
-          `<script type="module">${output.code}</script>`,
+          () => `<script type="module">${output.code}</script>`,
         );
         html = html.replace(
           new RegExp(`<script type="module" src="/${output.fileName}"></script>`),
-          `<script type="module">${output.code}</script>`,
+          () => `<script type="module">${output.code}</script>`,
         );
         delete bundle[fileName];
       }
@@ -32,11 +32,11 @@ const singleFileBuild = (): Plugin => ({
       if (output.type === 'asset' && output.fileName.endsWith('.css')) {
         html = html.replace(
           new RegExp(`<link rel="stylesheet" crossorigin href="/${output.fileName}">`),
-          `<style>${output.source}</style>`,
+          () => `<style>${output.source}</style>`,
         );
         html = html.replace(
           new RegExp(`<link rel="stylesheet" href="/${output.fileName}">`),
-          `<style>${output.source}</style>`,
+          () => `<style>${output.source}</style>`,
         );
         delete bundle[fileName];
       }

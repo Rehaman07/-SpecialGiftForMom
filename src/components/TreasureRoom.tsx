@@ -195,7 +195,7 @@ export const FinalReveal: React.FC = () => {
         >
           <div className="aspect-[3/4] w-full rounded-[2rem] overflow-hidden bg-pink-950/50 flex items-center justify-center relative">
             <img
-              src={GAME_CONFIG.REVEAL_IMAGE_URL}
+              src={MOMMY_IMAGE_URL}
               alt="Mother's Day"
               loading="eager"
               decoding="async"
@@ -223,7 +223,7 @@ export const FinalReveal: React.FC = () => {
 
           <div className="space-y-4 px-4">
             <p className="text-xl md:text-3xl font-accent italic text-pink-200">
-              "Happy Mother's Day {GAME_CONFIG.MOM_NAME}! You are the light of our universe."
+              Happy Mother's Day {GAME_CONFIG.MOM_NAME}! You are the light of our universe.
             </p>
             <p className="text-lg md:text-2xl font-display tracking-[0.3em] uppercase text-amber-200/60 animate-pulse">
               You are the heart of this family
@@ -290,7 +290,7 @@ export const FinalReveal: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <img
-                src={GAME_CONFIG.REVEAL_IMAGE_URL}
+                src={MOMMY_IMAGE_URL}
                 alt="Mother's Day Surprise"
                 loading="eager"
                 decoding="async"
