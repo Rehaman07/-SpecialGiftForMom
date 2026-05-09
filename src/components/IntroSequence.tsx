@@ -105,7 +105,7 @@ export const IntroSequence: React.FC = () => {
       {/* Cinematic Text */}
       <div ref={textRef} className="absolute text-center z-10 px-6">
         <h1 className="text-4xl md:text-6xl font-display uppercase tracking-[0.2em] text-white glow-neon">
-          For the most special person<br/>in my life...
+          Hi Ammi, You Need To Win Me<br/> To Grab Your Gift 😁...
         </h1>
         <Sparkles className="mx-auto mt-8 text-pink-400 animate-pulse" size={48} />
       </div>

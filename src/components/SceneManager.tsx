@@ -73,7 +73,7 @@ export const SceneManager: React.FC = () => {
               transition={{ delay: 0.5 }}
               className="text-2xl md:text-4xl font-accent italic text-pink-200 mb-8 max-w-2xl"
             >
-              "The path to your surprise is hidden behind three enchanted gates. Only with your love and magic can they be opened..."
+              "There are 3 Magical Doors. Find a Way to Open Them..."
             </motion.h2>
             <motion.button
               whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(236, 72, 153, 0.4)' }}
