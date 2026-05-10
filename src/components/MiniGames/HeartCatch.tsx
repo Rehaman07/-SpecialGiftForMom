@@ -1,278 +1,135 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Heart, ShieldAlert, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import { Heart, Sparkles } from 'lucide-react';
 import { useAudio } from '../../hooks/useAudio';
-import { useDocumentVisible, usePerformanceProfile } from '../../utils/performance';
 
-type FallingItem = {
-  id: number;
-  type: 'heart' | 'gold' | 'hazard';
-  x: number;
-  y: number;
-  speed: number;
-  size: number;
-};
-
-const GAME_WIDTH = 420;
-const GAME_HEIGHT = 440;
-const CATCHER_WIDTH = 96;
-const TARGET_SCORE = 24;
-const STARTING_LIVES = 3;
+const TARGET_SCORE = 5;
+const BUTTONS = [
+  { id: 0, label: 'Warm Hug', icon: Heart, color: 'text-pink-300', active: 'bg-pink-500/40 border-pink-300' },
+  { id: 1, label: 'Sweet Smile', icon: Sparkles, color: 'text-yellow-200', active: 'bg-yellow-500/30 border-yellow-200' },
+  { id: 2, label: 'Big Love', icon: Heart, color: 'text-rose-300', active: 'bg-rose-500/40 border-rose-300' },
+];
 
 export const HeartCatch: React.FC<{ onWin: () => void; onLose: () => void }> = ({ onWin, onLose }) => {
   const [score, setScore] = useState(0);
-  const [lives, setLives] = useState(STARTING_LIVES);
-  const [items, setItems] = useState<FallingItem[]>([]);
-  const [catcherX, setCatcherX] = useState(GAME_WIDTH / 2);
-  const [status, setStatus] = useState<'playing' | 'won' | 'lost'>('playing');
-  const nextIdRef = useRef(1);
-  const catcherRef = useRef(catcherX);
-  const scoreRef = useRef(score);
-  const statusRef = useRef(status);
-  const resultTimerRef = useRef(0);
-  const pendingCatcherFrame = useRef(0);
-  const pendingCatcherX = useRef(catcherX);
+  const [lives, setLives] = useState(3);
+  const [target, setTarget] = useState(() => Math.floor(Math.random() * BUTTONS.length));
+  const [selected, setSelected] = useState<number | null>(null);
+  const [finished, setFinished] = useState(false);
   const { playSound } = useAudio();
-  const profile = usePerformanceProfile();
-  const isVisible = useDocumentVisible();
 
-  useEffect(() => {
-    catcherRef.current = catcherX;
-  }, [catcherX]);
+  const targetButton = BUTTONS[target];
+  const progress = useMemo(() => Array.from({ length: TARGET_SCORE }, (_, index) => index < score), [score]);
 
-  useEffect(() => {
-    scoreRef.current = score;
-  }, [score]);
-
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-
-  const spawnItem = useCallback(() => {
-    if (statusRef.current !== 'playing') return;
-
-    const roll = Math.random();
-    const type: FallingItem['type'] = roll > 0.82 ? 'hazard' : roll > 0.68 ? 'gold' : 'heart';
-    const size = type === 'gold' ? 42 : type === 'hazard' ? 44 : 36;
-
-    setItems(prev => [
-      ...prev,
-      {
-        id: nextIdRef.current,
-        type,
-        x: 24 + Math.random() * (GAME_WIDTH - 48),
-        y: -48,
-        speed: (3.2 + Math.random() * 2.2 + Math.min(scoreRef.current / 18, 1.4)) * (profile.isLowEnd ? 0.92 : 1),
-        size,
-      },
-    ]);
-    nextIdRef.current += 1;
-  }, [profile.isLowEnd]);
-
-  useEffect(() => {
-    if (!isVisible) return;
-
-    let frameId = 0;
-    let lastTime = performance.now();
-    let moveAccumulator = 0;
-    let spawnAccumulator = 0;
-    const tickMs = profile.isLowEnd ? 48 : 32;
-    const spawnMs = profile.isLowEnd ? 660 : profile.isMobile ? 590 : 520;
-
-    const tick = (time: number) => {
-      const delta = Math.min(80, time - lastTime);
-      lastTime = time;
-
-      if (statusRef.current === 'playing') {
-        moveAccumulator += delta;
-        spawnAccumulator += delta;
-
-        if (spawnAccumulator >= spawnMs) {
-          spawnAccumulator = 0;
-          spawnItem();
-        }
-
-        if (moveAccumulator >= tickMs) {
-          moveAccumulator = 0;
-
-          setItems(prev => {
-            const remaining: FallingItem[] = [];
-            let scoreDelta = 0;
-            let lifeDelta = 0;
-            let caughtAny = false;
-            let hitHazard = false;
-
-            for (const item of prev) {
-              const nextItem = { ...item, y: item.y + item.speed };
-              const catcherLeft = catcherRef.current - CATCHER_WIDTH / 2;
-              const catcherRight = catcherRef.current + CATCHER_WIDTH / 2;
-              const itemCenter = nextItem.x;
-              const isCatchHeight = nextItem.y > GAME_HEIGHT - 82 && nextItem.y < GAME_HEIGHT - 24;
-              const isInCatcher = itemCenter > catcherLeft && itemCenter < catcherRight;
-
-              if (isCatchHeight && isInCatcher) {
-                if (nextItem.type === 'hazard') {
-                  lifeDelta -= 1;
-                  hitHazard = true;
-                } else {
-                  scoreDelta += nextItem.type === 'gold' ? 4 : 1;
-                  caughtAny = true;
-                }
-                continue;
-              }
-
-              if (nextItem.y > GAME_HEIGHT + 60) {
-                if (nextItem.type !== 'hazard') {
-                  lifeDelta -= 1;
-                  hitHazard = true;
-                }
-                continue;
-              }
-
-              remaining.push(nextItem);
-            }
-
-            if (caughtAny) playSound('heart');
-            if (hitHazard) playSound('fail');
-
-            if (scoreDelta > 0) {
-              setScore(current => {
-                const nextScore = current + scoreDelta;
-                if (nextScore >= TARGET_SCORE && statusRef.current === 'playing') {
-                  statusRef.current = 'won';
-                  setStatus('won');
-                  playSound('sparkle');
-                  window.clearTimeout(resultTimerRef.current);
-                  resultTimerRef.current = window.setTimeout(onWin, 450);
-                }
-                return nextScore;
-              });
-            }
-
-            if (lifeDelta < 0) {
-              setLives(current => {
-                const nextLives = Math.max(0, current + lifeDelta);
-                if (nextLives <= 0 && statusRef.current === 'playing') {
-                  statusRef.current = 'lost';
-                  setStatus('lost');
-                  window.clearTimeout(resultTimerRef.current);
-                  resultTimerRef.current = window.setTimeout(onLose, 700);
-                }
-                return nextLives;
-              });
-            }
-
-            return remaining;
-          });
-        }
-      }
-
-      frameId = window.requestAnimationFrame(tick);
-    };
-
-    frameId = window.requestAnimationFrame(tick);
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, [isVisible, onLose, onWin, playSound, profile.isLowEnd, profile.isMobile, spawnItem]);
-
-  const moveCatcher = (clientX: number, bounds: DOMRect) => {
-    const ratio = (clientX - bounds.left) / bounds.width;
-    const nextX = Math.min(GAME_WIDTH - CATCHER_WIDTH / 2, Math.max(CATCHER_WIDTH / 2, ratio * GAME_WIDTH));
-    pendingCatcherX.current = nextX;
-    window.cancelAnimationFrame(pendingCatcherFrame.current);
-    pendingCatcherFrame.current = window.requestAnimationFrame(() => {
-      catcherRef.current = pendingCatcherX.current;
-      setCatcherX(pendingCatcherX.current);
-    });
+  const chooseNextTarget = (picked: number) => {
+    let next = Math.floor(Math.random() * BUTTONS.length);
+    if (next === picked) next = (next + 1) % BUTTONS.length;
+    setTarget(next);
   };
 
-  useEffect(() => () => {
-    window.cancelAnimationFrame(pendingCatcherFrame.current);
-    window.clearTimeout(resultTimerRef.current);
-  }, []);
+  const handlePick = (picked: number) => {
+    if (finished || selected !== null) return;
+
+    setSelected(picked);
+
+    if (picked === target) {
+      playSound('heart');
+      const nextScore = score + 1;
+      setScore(nextScore);
+
+      window.setTimeout(() => {
+        if (nextScore >= TARGET_SCORE) {
+          setFinished(true);
+          playSound('sparkle');
+          window.setTimeout(onWin, 450);
+          return;
+        }
+
+        chooseNextTarget(picked);
+        setSelected(null);
+      }, 450);
+      return;
+    }
+
+    playSound('fail');
+    const nextLives = lives - 1;
+    setLives(nextLives);
+
+    window.setTimeout(() => {
+      if (nextLives <= 0) {
+        setFinished(true);
+        onLose();
+        return;
+      }
+
+      setSelected(null);
+    }, 550);
+  };
 
   return (
-    <div
-      className="relative w-[min(92vw,420px)] h-[min(68vh,440px)] min-h-[360px] glass rounded-3xl overflow-hidden bg-gradient-to-b from-amber-900/50 via-rose-950/50 to-black/70 touch-none"
-      onPointerMove={(event) => moveCatcher(event.clientX, event.currentTarget.getBoundingClientRect())}
-      onPointerDown={(event) => {
-        playSound('click');
-        moveCatcher(event.clientX, event.currentTarget.getBoundingClientRect());
-      }}
-    >
-      <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-4">
-        <div>
-          <div className="text-xs font-display uppercase tracking-widest text-amber-200">Love Cargo</div>
-          <div className="text-3xl font-bold text-white">{Math.min(score, TARGET_SCORE)} <span className="text-white/30">/ {TARGET_SCORE}</span></div>
+    <div className="relative w-full max-w-sm glass rounded-3xl overflow-hidden bg-gradient-to-b from-amber-900/50 via-rose-950/50 to-black/70 p-6 sm:p-8">
+      <div className="text-center">
+        <div className="text-xs font-display uppercase tracking-widest text-amber-200/70">Love Lock</div>
+        <h3 className="mt-2 text-2xl font-display text-white uppercase tracking-widest">Match the Glow</h3>
+        <p className="mt-2 text-sm font-accent italic text-white/60">Tap the symbol Mom's magic asks for.</p>
+      </div>
+
+      <motion.div
+        key={target}
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="my-8 flex flex-col items-center gap-3"
+      >
+        <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-amber-200/50 bg-white/10 shadow-[0_0_36px_rgba(251,191,36,0.28)]">
+          <targetButton.icon className={`${targetButton.color} fill-current`} size={48} />
+          <div className="absolute -inset-3 rounded-full border border-white/10 animate-pulse" />
         </div>
-        <div className="flex gap-1 pt-1">
-          {[...Array(STARTING_LIVES)].map((_, index) => (
-            <Heart key={index} size={22} className={index < lives ? 'text-rose-400 fill-rose-400' : 'text-white/20'} />
+        <div className="text-sm font-display uppercase tracking-[0.25em] text-amber-100/70">{targetButton.label}</div>
+      </motion.div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {BUTTONS.map((button) => {
+          const Icon = button.icon;
+          const isPicked = selected === button.id;
+          const isCorrectPick = isPicked && button.id === target;
+          const isWrongPick = isPicked && button.id !== target;
+
+          return (
+            <motion.button
+              key={button.id}
+              whileTap={{ scale: 0.94 }}
+              onClick={() => handlePick(button.id)}
+              disabled={selected !== null || finished}
+              className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border p-3 touch-manipulation transition-colors ${
+                isCorrectPick
+                  ? button.active
+                  : isWrongPick
+                    ? 'bg-red-500/30 border-red-300'
+                    : 'bg-white/5 border-white/10 hover:bg-white/15'
+              }`}
+            >
+              <Icon className={`${button.color} ${button.icon === Heart ? 'fill-current' : ''}`} size={30} />
+              <span className="text-[10px] font-display uppercase tracking-widest text-white/70">{button.label}</span>
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 flex items-center justify-between">
+        <div className="flex gap-2">
+          {progress.map((filled, index) => (
+            <div
+              key={index}
+              className={`h-3 w-3 rounded-full ${filled ? 'bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.7)]' : 'bg-white/15'}`}
+            />
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {[0, 1, 2].map((life) => (
+            <Heart key={life} size={18} className={life < lives ? 'text-rose-400 fill-rose-400' : 'text-white/20'} />
           ))}
         </div>
       </div>
-
-      <div className="absolute inset-0 opacity-30">
-        {[...Array(18)].map((_, index) => (
-          <motion.div
-            key={index}
-            className="absolute h-16 w-px bg-amber-200/40"
-            style={{ left: `${(index / 18) * 100}%` }}
-            animate={{ y: [-80, 520] }}
-            transition={{ duration: 2.4 + index * 0.04, repeat: Infinity, ease: 'linear', delay: index * 0.08 }}
-          />
-        ))}
-      </div>
-
-      <AnimatePresence>
-        {items.map(item => (
-          <motion.div
-            key={item.id}
-            initial={{ scale: 0.4, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 1.6, opacity: 0 }}
-            className="absolute z-10 flex items-center justify-center rounded-full"
-            style={{ left: item.x - item.size / 2, top: item.y, width: item.size, height: item.size }}
-          >
-            {item.type === 'hazard' ? (
-              <ShieldAlert className="text-red-300 drop-shadow-[0_0_14px_rgba(248,113,113,0.8)]" size={item.size} />
-            ) : item.type === 'gold' ? (
-              <Sparkles className="text-yellow-300 fill-yellow-300 drop-shadow-[0_0_16px_rgba(250,204,21,0.8)]" size={item.size} />
-            ) : (
-              <Heart className="text-pink-400 fill-pink-400 drop-shadow-[0_0_14px_rgba(244,114,182,0.8)]" size={item.size} />
-            )}
-          </motion.div>
-        ))}
-      </AnimatePresence>
-
-      <motion.div
-        className="absolute bottom-5 z-20 h-12 rounded-full border-2 border-amber-200/70 bg-amber-500/20 shadow-[0_0_24px_rgba(251,191,36,0.35)]"
-        animate={{ x: catcherX - CATCHER_WIDTH / 2 }}
-        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-        style={{ width: CATCHER_WIDTH }}
-      >
-        <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-3xl">{"\u2728"}</div>
-      </motion.div>
-
-      <AnimatePresence>
-        {status !== 'playing' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          >
-            <div className="text-center">
-              <div className="font-display text-3xl uppercase tracking-widest text-white">
-                {status === 'won' ? 'Treasure Secured' : 'Cargo Lost'}
-              </div>
-              <div className="mt-2 text-sm text-white/60">
-                {status === 'won' ? 'Opening the next gate...' : 'The magic rewinds...'}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

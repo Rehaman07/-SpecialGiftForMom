@@ -38,7 +38,8 @@ const THEMES = [
 export const DoorScene: React.FC<{ doorIndex: number }> = ({ doorIndex }) => {
   const [unlocked, setUnlocked] = useState(false);
   const [showGame, setShowGame] = useState(false);
-  const { setScene, resetGame } = useGameStore();
+  const [gameAttempt, setGameAttempt] = useState(0);
+  const { setScene } = useGameStore();
   const { playSound } = useAudio();
   const theme = THEMES[doorIndex - 1];
   const profile = usePerformanceProfile();
@@ -74,7 +75,7 @@ export const DoorScene: React.FC<{ doorIndex: number }> = ({ doorIndex }) => {
 
   const handleLose = () => {
     playSound('fail');
-    resetGame();
+    setGameAttempt(attempt => attempt + 1);
   };
 
   return (
@@ -169,9 +170,9 @@ export const DoorScene: React.FC<{ doorIndex: number }> = ({ doorIndex }) => {
             exit={{ scale: 0.5, opacity: 0 }}
             className="flex flex-col items-center gap-8 perspective-2000 w-full max-w-[min(92vw,420px)]"
           >
-            {doorIndex === 1 && <SlipperChase onWin={handleWin} onLose={handleLose} />}
-            {doorIndex === 2 && <HeartCatch onWin={handleWin} onLose={handleLose} />}
-            {doorIndex === 3 && <MomTranslator onWin={handleWin} onLose={handleLose} />}
+            {doorIndex === 1 && <SlipperChase key={gameAttempt} onWin={handleWin} onLose={handleLose} />}
+            {doorIndex === 2 && <HeartCatch key={gameAttempt} onWin={handleWin} onLose={handleLose} />}
+            {doorIndex === 3 && <MomTranslator key={gameAttempt} onWin={handleWin} onLose={handleLose} />}
 
             <button
               onClick={() => {

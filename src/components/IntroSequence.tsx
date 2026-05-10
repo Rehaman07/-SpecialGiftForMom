@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { useGameStore } from '../store/useGameStore';
 import { useAudio } from '../hooks/useAudio';
@@ -8,6 +8,8 @@ import { usePerformanceProfile, useStableParticles } from '../utils/performance'
 export const IntroSequence: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
+  const introTimelineRef = useRef<gsap.core.Timeline | null>(null);
+  const hasDismissedRef = useRef(false);
   const { setScene } = useGameStore();
   const { playSound } = useAudio();
   const profile = usePerformanceProfile();
@@ -22,12 +24,8 @@ export const IntroSequence: React.FC = () => {
   );
 
   useEffect(() => {
-    let completionTimer = 0;
-    const tl = gsap.timeline({
-      onComplete: () => {
-        completionTimer = window.setTimeout(() => setScene('STORY'), 1000);
-      }
-    });
+    const tl = gsap.timeline();
+    introTimelineRef.current = tl;
 
     // Initial darkness to glows
     tl.to('.particle-glow', {
@@ -43,50 +41,41 @@ export const IntroSequence: React.FC = () => {
       { opacity: 1, y: 0, filter: 'blur(0px)', duration: 2, ease: 'power2.out' }
     );
 
-    tl.to(textRef.current, { opacity: 0, filter: 'blur(10px)', duration: 1.5, delay: 1 });
-
-    // Layered Doors Sequence
-    const doors = [1, 2, 3];
-    doors.forEach((d, i) => {
-      tl.add(() => playSound('doorSlam'), "+=0.2");
-      tl.fromTo(`.door-layer-${d}`, 
-        { scale: 3, opacity: 0, z: 1000 },
-        { scale: 1, opacity: 1, z: 0, duration: 0.8, ease: 'back.out(1.2)' },
-        "-=0.1"
-      );
-      
-      tl.to(`.door-layer-${d}`, {
-        boxShadow: "0 0 50px rgba(255,105,180,0.5)",
-        duration: 0.2
-      });
-
-      if (i < doors.length - 1) {
-        tl.to(`.door-layer-${d}`, {
-          x: 1000,
-          opacity: 0,
-          duration: 0.6,
-          ease: 'power2.in',
-          delay: 0.5
-        });
-      }
-    });
-
-    tl.to('.intro-container', {
-      scale: 1.5,
-      opacity: 0,
-      duration: 1,
-      ease: 'power2.inOut',
-      delay: 0.5
-    });
-
     return () => {
-      window.clearTimeout(completionTimer);
       tl.kill();
+      introTimelineRef.current = null;
     };
-  }, [setScene, playSound]);
+  }, []);
+
+  const handleDismiss = useCallback(() => {
+    if (hasDismissedRef.current) return;
+    hasDismissedRef.current = true;
+
+    introTimelineRef.current?.kill();
+    playSound('sparkle');
+
+    gsap.to(containerRef.current, {
+      opacity: 0,
+      scale: 1.08,
+      filter: 'blur(18px)',
+      duration: 0.9,
+      ease: 'power2.inOut',
+      onComplete: () => setScene('STORY'),
+    });
+  }, [playSound, setScene]);
 
   return (
-    <div ref={containerRef} className="intro-container fixed inset-0 z-[100] bg-black flex items-center justify-center overflow-hidden perspective-2000 pointer-events-none">
+    <div
+      ref={containerRef}
+      onClick={handleDismiss}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') handleDismiss();
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="Continue to the story"
+      className="intro-container fixed inset-0 z-[100] bg-black flex items-center justify-center overflow-hidden perspective-2000 cursor-pointer touch-manipulation"
+    >
       {/* Background Particles */}
       {particles.map((particle) => (
         <div 
